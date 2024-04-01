@@ -5,6 +5,7 @@
 // DEBUG LED :
 // ON 4s ; OFF 0.5s ; ON 1s ; OFF 0.5s : ETH Cable ERROR
 // ON 1s ; OFF 0.5s ; ON 1s ; OFF 0.5s : DHCP Error
+// ON 4s ; OFF 4s                      : No connection with the Host
 // ON 1s ; OFF 4s                      : Waiting for the Next Request
 // ON 0.1s ; OFF 0.1s                  : Waiting for the Response
 
@@ -170,6 +171,12 @@ int GetInverterPower(){
   } else {// if not connected:
     // Debug INFO
     //Serial.println("connection failed");
+    for (int i = 0; i < 5 ; i++){
+    digitalWrite(LED_BUILTIN, HIGH);  // turn the LED on (HIGH is the voltage level)
+    delay(4000);                      // wait for a second
+    digitalWrite(LED_BUILTIN, LOW);   // turn the LED off by making the voltage LOW
+    delay(4000); 
+  }
   }
   return CurrentPower;
 }
