@@ -1,6 +1,7 @@
 #include <SPI.h>
 #include <Ethernet.h>
 #include <string>
+#include <ArduinoLowPower.h>
 
 // DEBUG LED :
 // ON 4s ; OFF 0.5s ; ON 1s ; OFF 0.5s : ETH Cable ERROR
@@ -14,17 +15,23 @@ byte mac[] = { 0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED };
 
 EthernetClient client;
 
-int    HTTP_PORT   = 80;
-String HTTP_METHOD = "GET";
-char   HOST_NAME[] = "192.168.1.170";
-String PATH_NAME   = "/solar_api/v1/GetInverterRealtimeData.cgi";
-String queryString = "?Scope=Device&DeviceId=1&DataCollection=CumulationInverterData";
+const int    HTTP_PORT   = 80;
+const String HTTP_METHOD = "GET";
+const char   HOST_NAME[] = "192.168.1.170";
+const String PATH_NAME   = "/solar_api/v1/GetInverterRealtimeData.cgi";
+const String queryString = "?Scope=Device&DeviceId=1&DataCollection=CumulationInverterData";
 
-const char ComparedBuffer[5] = {'"','P','A','C','"'};
+const char ComparedPowerBuffer[5] = {'"','P','A','C','"'};
+const char ComparedTimeBuffer[11] = {'"','T','i','m','e','s','t','a','m','p','"'};
 
 const int SwitchPin = 6;
 const int PowerLimit = 5000; 
 const int DelayBetweenCheck = 90000;
+const int NumberOfRequestBetweenTimeCheck = 60;
+const int TimeToSleep = 21; // After 21h it will sleep for "NightSleepDuration"
+const int NightSleepDuration = 32400000; // 9h in millisecondes
+
+int NumberOfRequestSinceLastTimeCheck = 0;
 
 void EthernetSetup(){
   if (Ethernet.linkStatus() != LinkON){
@@ -33,11 +40,11 @@ void EthernetSetup(){
     while(Ethernet.linkStatus() != LinkON){
       //LED ETH ERROR PATTERN
       digitalWrite(LED_BUILTIN, HIGH);  // turn the LED on (HIGH is the voltage level)
-      delay(4000);                      
+      LowPower.sleep(4000);                      
       digitalWrite(LED_BUILTIN, LOW);   // turn the LED off by making the voltage LOW
       delay(500); 
       digitalWrite(LED_BUILTIN, HIGH);  // turn the LED on (HIGH is the voltage level)
-      delay(1000);  
+      LowPower.sleep(1000);  
       digitalWrite(LED_BUILTIN, LOW);   // turn the LED off by making the voltage LOW
       delay(500); 
     }
@@ -54,11 +61,11 @@ void EthernetSetup(){
     while(ETHCode == 0){
       // LED DHCP ERROR PATTERN
       digitalWrite(LED_BUILTIN, HIGH);  // turn the LED on (HIGH is the voltage level)
-      delay(1000);                      
+      LowPower.sleep(1000);                      
       digitalWrite(LED_BUILTIN, LOW);   // turn the LED off by making the voltage LOW
       delay(500); 
       digitalWrite(LED_BUILTIN, HIGH);  // turn the LED on (HIGH is the voltage level)
-      delay(1000);  
+      LowPower.sleep(1000);  
       digitalWrite(LED_BUILTIN, LOW);   // turn the LED off by making the voltage LOW
       delay(500); 
       ETHCode = Ethernet.begin(mac);
@@ -67,13 +74,13 @@ void EthernetSetup(){
   
 }
 
-bool CompareBuffers(const char* pComparedBuffer, char* pParsBuffer, unsigned char Offset) {
+bool CompareBuffers(const char* pComparedBuffer, char* pParsBuffer, unsigned char Offset, unsigned char BufferLenght) {
     if (pComparedBuffer && pParsBuffer) {
         char DeltaPos;
-        for (char i = 0; i < 5; i++) {
+        for (char i = 0; i < BufferLenght; i++) {
             DeltaPos = i + Offset;
-            if (DeltaPos > 4) {
-              DeltaPos -= 5;
+            if (DeltaPos >= BufferLenght) {
+              DeltaPos -= BufferLenght;
             }
             if (*(pComparedBuffer + i) != *(pParsBuffer + DeltaPos)) {
                 return false;
@@ -84,6 +91,99 @@ bool CompareBuffers(const char* pComparedBuffer, char* pParsBuffer, unsigned cha
     return false;
 }
 
+int GetInverterTime(){
+
+  int CurrentTime = 0;
+  if(client.connect(HOST_NAME, HTTP_PORT)) {
+    // if connected: // Debug INFO
+    //Serial.println("Connected to server");
+    // make a HTTP request:
+    // send HTTP header
+    client.println(HTTP_METHOD + " " + PATH_NAME + queryString + " HTTP/1.1");
+    client.println("Host: " + String(HOST_NAME));
+    client.println("Connection: close");
+    client.println(); // end HTTP header
+
+    char DelayCounter = 0;
+    while (!client.available()){
+      digitalWrite(LED_BUILTIN, HIGH);  // turn the LED on (HIGH is the voltage level)
+      delay(10);
+      digitalWrite(LED_BUILTIN, LOW);   // turn the LED off by making the voltage LOW
+      delay(10); 
+      DelayCounter++;
+      if (DelayCounter > 50){
+        // Debug INFO
+        //Serial.println("Wait for too long, pass");
+        return 0;
+      }
+    }
+    int DataSize = client.available();
+    if(DataSize){
+      char ParsBuffer[11];
+      unsigned char ParsBufferPos = 0;
+      for (int i = 0 ; i < 11 ; i++ ){
+        ParsBuffer[i] = client.read();
+      }
+      DataSize -= 11;
+      while (!CompareBuffers(ComparedTimeBuffer, ParsBuffer, ParsBufferPos, 11)){
+        ParsBuffer[ParsBufferPos] = client.read();
+        ParsBufferPos++;
+        DataSize--;
+        if(ParsBufferPos > 10){
+          ParsBufferPos = 0;
+          }
+        if(DataSize <= 0){
+          
+          //Serial.println();
+          //Serial.println("Current Time: 0h");
+          //Serial.println();
+          //Serial.println("disconnected");
+
+          client.stop();
+          return 0;
+        }
+        }
+
+      //SKIP THE ' : "2024-04-08T'
+      for (char i = 0 ; i < 15 ; i++){
+        client.read();
+      }
+
+      //Take the hours number
+      char Content[3];
+      Content[0] = client.read();
+      Content[1] = client.read();
+      Content[2] = '\0';
+
+      //Serial.print(Content);
+      //Serial.println("h");
+
+      const String ContentString = Content;
+      CurrentTime = ContentString.toInt();
+    }
+    
+    
+    // the server's disconnected, stop the client:
+    client.stop();
+
+    // Debug INFO
+    //Serial.println();
+    //Serial.println("Current Time : " + String(CurrentTime) + "h");
+    //Serial.println();
+    //Serial.println("disconnected");
+
+  } else {// if not connected:
+    // Debug INFO
+    //Serial.println("connection failed");
+    for (int i = 0; i < 5 ; i++){
+    digitalWrite(LED_BUILTIN, HIGH);  // turn the LED on (HIGH is the voltage level)
+    LowPower.sleep(4000);             // wait for a second
+    digitalWrite(LED_BUILTIN, LOW);   // turn the LED off by making the voltage LOW
+    LowPower.sleep(4000); 
+  }
+  }
+  return CurrentTime;
+}
 
 int GetInverterPower(){
   // connect to web server on port 80:
@@ -119,7 +219,7 @@ int GetInverterPower(){
         ParsBuffer[i] = client.read();
       }
       DataSize -= 5;
-      while (!CompareBuffers(ComparedBuffer, ParsBuffer, ParsBufferPos)){
+      while (!CompareBuffers(ComparedPowerBuffer, ParsBuffer, ParsBufferPos, 5)){
         ParsBuffer[ParsBufferPos] = client.read();
         ParsBufferPos++;
         DataSize--;
@@ -173,9 +273,9 @@ int GetInverterPower(){
     //Serial.println("connection failed");
     for (int i = 0; i < 5 ; i++){
     digitalWrite(LED_BUILTIN, HIGH);  // turn the LED on (HIGH is the voltage level)
-    delay(4000);                      // wait for a second
+    LowPower.sleep(4000);                      // wait for a second
     digitalWrite(LED_BUILTIN, LOW);   // turn the LED off by making the voltage LOW
-    delay(4000); 
+    LowPower.sleep(4000); 
   }
   }
   return CurrentPower;
@@ -187,26 +287,47 @@ void setup() {
   //Serial.begin(9600);
   //Waiting For The Serial Connection
   //while (!Serial);
+  //Serial.println("Connected to Serial");
   // initialize the Ethernet shield using DHCP:
   EthernetSetup();
 }
 
 void loop() {
   //LED Request Always ON
-  digitalWrite(LED_BUILTIN, HIGH); 
+  digitalWrite(LED_BUILTIN, HIGH);
+
+  //PowerCheck 
+  //Serial.println("Power Check");
   if (GetInverterPower() > PowerLimit){
     digitalWrite(SwitchPin, HIGH);
   } else {
     digitalWrite(SwitchPin, LOW);
   }
-  
-  //LED Waiting Pattern
-  for (int i = 0; i <= DelayBetweenCheck ; i  += 5000){
-    digitalWrite(LED_BUILTIN, HIGH);  // turn the LED on (HIGH is the voltage level)
-    delay(1000);                      // wait for a second
-    digitalWrite(LED_BUILTIN, LOW);   // turn the LED off by making the voltage LOW
-    delay(4000); 
+
+  //TimeCheck
+  if(NumberOfRequestSinceLastTimeCheck >= NumberOfRequestBetweenTimeCheck){
+    //Serial.println("Time Check");
+    if(GetInverterTime() >= TimeToSleep){
+      //Serial.println("Time to Sleep");
+      digitalWrite(SwitchPin, LOW);
+      digitalWrite(LED_BUILTIN, LOW);
+      LowPower.deepSleep(NightSleepDuration);
+
+    }
+    NumberOfRequestSinceLastTimeCheck = 0;
+  } else {
+    NumberOfRequestSinceLastTimeCheck++;
+
+    //LED Waiting Pattern
+    for (int i = 0; i <= DelayBetweenCheck ; i  += 5000){
+      digitalWrite(LED_BUILTIN, HIGH);  // turn the LED on (HIGH is the voltage level)
+      LowPower.sleep(1000);             // wait for a second
+      digitalWrite(LED_BUILTIN, LOW);   // turn the LED off by making the voltage LOW
+      LowPower.sleep(4000); 
+    }
+
   }
+
   //Maintain Internet Connection and If NOT : Setup It Again
   char Maintain = Ethernet.maintain();
   //Serial.println(Maintain);
