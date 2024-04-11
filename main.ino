@@ -17,16 +17,19 @@ EthernetClient client;
 
 const int    HTTP_PORT   = 80;
 const String HTTP_METHOD = "GET";
-const char   HOST_NAME[] = "192.168.1.170";
-const String PATH_NAME   = "/solar_api/v1/GetInverterRealtimeData.cgi";
-const String queryString = "?Scope=Device&DeviceId=1&DataCollection=CumulationInverterData";
+const char   HOST_NAME[] = "https://monitoringapi.solaredge.com";
+const String PATH_NAME   = "/v2/sites/{id}/power-flow";
+const String X_Account_Key = "X-ACCOUNT-KEY: {key}";
+const String X_API_Key = "X-API-KEY: {key}";
+const String Accept = "Accept: application/json, application/problem+json";
 
-const char ComparedPowerBuffer[5] = {'"','P','A','C','"'};
-const char ComparedTimeBuffer[11] = {'"','T','i','m','e','s','t','a','m','p','"'};
+
+const char ComparedPowerBuffer[4] = {'"','p','v','"'};
+const char ComparedTimeBuffer[11] = {'"','u','p','d','a','t','e','d','A','t','"'};
 
 const int SwitchPin = 6;
-const int PowerLimit = 5000; 
-const int DelayBetweenCheck = 90000;
+const int PowerLimit = 3000; 
+const int DelayBetweenCheck = 240000;
 const int NumberOfRequestBetweenTimeCheck = 60;
 const int TimeToSleep = 21; // After 21h it will sleep for "NightSleepDuration"
 const int NightSleepDuration = 32400000; // 9h in millisecondes
@@ -99,7 +102,10 @@ int GetInverterTime(){
     //Serial.println("Connected to server");
     // make a HTTP request:
     // send HTTP header
-    client.println(HTTP_METHOD + " " + PATH_NAME + queryString + " HTTP/1.1");
+    client.println(HTTP_METHOD + " " + PATH_NAME + " HTTP/1.1");
+    client.println(X_Account_Key);
+    client.println(X_API_Key);
+    client.println(Accept);
     client.println("Host: " + String(HOST_NAME));
     client.println("Connection: close");
     client.println(); // end HTTP header
@@ -193,7 +199,10 @@ int GetInverterPower(){
     //Serial.println("Connected to server");
     // make a HTTP request:
     // send HTTP header
-    client.println(HTTP_METHOD + " " + PATH_NAME + queryString + " HTTP/1.1");
+    client.println(HTTP_METHOD + " " + PATH_NAME + " HTTP/1.1");
+    client.println(X_Account_Key);
+    client.println(X_API_Key);
+    client.println(Accept);
     client.println("Host: " + String(HOST_NAME));
     client.println("Connection: close");
     client.println(); // end HTTP header
