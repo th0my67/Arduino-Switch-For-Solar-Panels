@@ -1,19 +1,23 @@
 #include <SPI.h>
-#include <Ethernet.h>
+#include <WiFiNINA.h>
 #include <string>
 #include <ArduinoLowPower.h>
 
 // DEBUG LED :
-// ON 4s ; OFF 0.5s ; ON 1s ; OFF 0.5s : ETH Cable ERROR
+
 // ON 1s ; OFF 0.5s ; ON 1s ; OFF 0.5s : DHCP Error
 // ON 4s ; OFF 4s                      : No connection with the Host
 // ON 1s ; OFF 4s                      : Waiting for the Next Request
 // ON 0.1s ; OFF 0.1s                  : Waiting for the Response
 
+char ssid[] = "SSID"; // your network SSID (name)
+char pass[] = "PASSWORD"; // your network password
+
+
 // replace the MAC address below by the MAC address printed on a sticker on the Arduino Shield 2
 byte mac[] = { 0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED };
 
-EthernetClient client;
+WifiClient client;
 
 const int    HTTP_PORT   = 80;
 const String HTTP_METHOD = "GET";
@@ -36,32 +40,14 @@ const int NightSleepDuration = 32400000; // 9h in millisecondes
 
 int NumberOfRequestSinceLastTimeCheck = 0;
 
-void EthernetSetup(){
-  if (Ethernet.linkStatus() != LinkON){
-    // Debug INFO
-    //Serial.println("Link status: Off");
-    while(Ethernet.linkStatus() != LinkON){
-      //LED ETH ERROR PATTERN
-      digitalWrite(LED_BUILTIN, HIGH);  // turn the LED on (HIGH is the voltage level)
-      LowPower.sleep(4000);                      
-      digitalWrite(LED_BUILTIN, LOW);   // turn the LED off by making the voltage LOW
-      delay(500); 
-      digitalWrite(LED_BUILTIN, HIGH);  // turn the LED on (HIGH is the voltage level)
-      LowPower.sleep(1000);  
-      digitalWrite(LED_BUILTIN, LOW);   // turn the LED off by making the voltage LOW
-      delay(500); 
-    }
-  } else {
-    // Debug INFO
-    //Serial.println("Link status: On");
+void WifiSetup(){
 
-  }
-  int ETHCode = Ethernet.begin(mac);
-  if (ETHCode == 0) {
+  int WifiCode = WiFi.begin(mac);
+  if (WifiCode == 0) {
     // Debug INFO
     //Serial.println("Failed to obtain an IP address using DHCP");
     delay(10000);
-    while(ETHCode == 0){
+    while(WifiCode == 0){
       // LED DHCP ERROR PATTERN
       digitalWrite(LED_BUILTIN, HIGH);  // turn the LED on (HIGH is the voltage level)
       LowPower.sleep(1000);                      
@@ -97,7 +83,7 @@ bool CompareBuffers(const char* pComparedBuffer, char* pParsBuffer, unsigned cha
 int GetInverterTime(){
 
   int CurrentTime = 0;
-  if(client.connect(HOST_NAME, HTTP_PORT)) {
+  if(client.connectSSL(HOST_NAME, HTTP_PORT)) {
     // if connected: // Debug INFO
     //Serial.println("Connected to server");
     // make a HTTP request:
