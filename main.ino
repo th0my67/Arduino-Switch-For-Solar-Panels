@@ -57,7 +57,7 @@ void WifiSetup(){
       LowPower.sleep(1000);  
       digitalWrite(LED_BUILTIN, LOW);   // turn the LED off by making the voltage LOW
       delay(500); 
-      ETHCode = Ethernet.begin(mac);
+      WifiCode = Wifi.begin(mac);
     }
   }
   
@@ -284,7 +284,7 @@ void setup() {
   //while (!Serial);
   //Serial.println("Connected to Serial");
   // initialize the Ethernet shield using DHCP:
-  EthernetSetup();
+  WifiSetup();
 }
 
 void loop() {
@@ -323,10 +323,4 @@ void loop() {
 
   }
 
-  //Maintain Internet Connection and If NOT : Setup It Again
-  char Maintain = Ethernet.maintain();
-  //Serial.println(Maintain);
-  if(Maintain == 1 || Maintain == 3){
-      EthernetSetup();
-  }
 }
