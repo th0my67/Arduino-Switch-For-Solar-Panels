@@ -1,6 +1,6 @@
 # Solar Panels / Inverter Arduino Switch
 
-The objective of this project is to activate a switch when the solar panel inverter produces power exceeding a certain threshold. Specifically, I aim to activate my boiler when the power output exceeds 5000W. This setup is tailored to function with an [Arduino Nano 33IoT](https://docs.arduino.cc/hardware/nano-33-iot/), the [MKR ETH Shield](https://docs.arduino.cc/hardware/mkr-eth-shield/), and a SolarEdge inverter compatible with SolarEdge Monitoring API v2. It emits a 3.3V signal from pin 6 when the inverter surpasses 5000W, which can be utilized to trigger a switch.
+The objective of this project is to activate a switch when the solar panel inverter produces power exceeding a certain threshold. Specifically, I aim to activate my boiler when the power output exceeds 5000W. This setup is tailored to function with an [Arduino Nano 33IoT](https://docs.arduino.cc/hardware/nano-33-iot/) and a SolarEdge inverter compatible with SolarEdge Monitoring API v2. It emits a 3.3V signal from pin 6 when the inverter surpasses 5000W, which can be utilized to trigger a switch.
 Several Arduino libraries were utilized, primarily the [WifiNINA](https://www.arduino.cc/reference/en/libraries/wifinina/) library. Additionally, the project relies on the [SPI](https://www.arduino.cc/reference/en/language/functions/communication/spi/) library, the [Arduino Low Power](https://www.arduino.cc/reference/en/libraries/arduino-low-power/) library and the Arduino.h file provided within the IDE.
 
 ## Customization
