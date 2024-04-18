@@ -4,8 +4,6 @@
 #include <ArduinoLowPower.h>
 
 // DEBUG LED :
-
-// ON 1s ; OFF 0.5s ; ON 1s ; OFF 0.5s : DHCP Error
 // ON 4s ; OFF 4s                      : No connection with the Host
 // ON 1s ; OFF 4s                      : Waiting for the Next Request
 // ON 0.1s ; OFF 0.1s                  : Waiting for the Response
