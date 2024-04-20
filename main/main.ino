@@ -25,9 +25,9 @@ const String Accept = "Accept: application/json, application/problem+json";
 #define ComparedPowerBufferLength 4
 const char ComparedPowerBuffer[] = {'"','p','v','"'};
 
-const int SwitchPin = 6;
+const int SwitchPin = 9;
 const int PowerLimit = 3000; 
-const int DelayBetweenCheck = 240000;
+const int DelayBetweenCheck = 90000;
 const int NumberOfRequestBetweenTimeCheck = 60;
 const int TimeToSleep = 21; // After 21h it will sleep for "NightSleepDuration"
 const int NightSleepDuration = 32400000; // 9h in millisecondes
@@ -183,6 +183,9 @@ int GetInverterPower(){
     LowPower.sleep(4000);                      // wait for a second
     digitalWrite(LED_BUILTIN, LOW);   // turn the LED off by making the voltage LOW
     LowPower.sleep(4000); 
+    if(WiFi.status() != WL_CONNECTED){
+      WifiSetup();
+    }
   }
   }
   return CurrentPower;
@@ -229,7 +232,7 @@ void loop() {
     NumberOfRequestSinceLastTimeCheck++;
 
     //LED Waiting Pattern
-    for (int i = 0; i <= DelayBetweenCheck ; i  += 5000){
+    for (int i = 0; i <= DelayBetweenCheck ; i  += 7500 ){ // 7500 millis takes into account the duration of the wake-up
       digitalWrite(LED_BUILTIN, HIGH);  // turn the LED on (HIGH is the voltage level)
       LowPower.sleep(1000);             // wait for a second
       digitalWrite(LED_BUILTIN, LOW);   // turn the LED off by making the voltage LOW
