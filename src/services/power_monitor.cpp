@@ -11,7 +11,7 @@ PowerMonitor::PowerMonitor(std::unique_ptr<IInverterAPI> inverterAPI):
 Result<float, PowerError> PowerMonitor::getOutputPower() {
     unsigned long startTime = millis();
     while (numberOfRetries_ < maxRetries_) {
-        auto result = inverterAPI_->getCurrentPower();
+        auto result = inverterAPI_ -> getCurrentPower();
         if (result.isOk()){
             lastSuccessfulReading_ = result.unwrap();
             lastSuccessfulReadingMs_ = millis();
