@@ -9,7 +9,7 @@
 FroniusSolarApiV1::FroniusSolarApiV1(const IPAddress ipAddress) : ipAddress_(ipAddress), httpClient_(std::move(HttpClient(,ipAddress))) {}
 
 Result<float, InverterError> FroniusSolarApiV1::getCurrentPower() {
-    const char endpoint[256] = "/solar_api/v1/GetInverterRealtimeData.cg1";
-    const char query[256] = "?Scope=Device&DeviceId=1&DataCollection=CumulationInverterData";
+    const char endpoint[] = "/solar_api/v1/GetInverterRealtimeData.cg1";
+    const char query[] = "?Scope=Device&DeviceId=1&DataCollection=CumulationInverterData";
 
 }

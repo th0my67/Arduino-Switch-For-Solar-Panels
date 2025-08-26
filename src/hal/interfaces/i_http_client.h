@@ -1,13 +1,27 @@
 #ifndef I_HTTP_CLIENT_H
 #define I_HTTP_CLIENT_H
 
-#include <cstddef>
+#include "utils/result.h"
+#include <Arduino.h>
+#include <string_view>
 
-class IHTTPClient {
+enum class HttpError {
+    NetworkFailure,
+    Timeout,
+    InvalidResponse,
+    ServerError,
+    NotFound
+};
+
+class IHttpClient {
 public:
-    virtual ~IHTTPClient() = default;
+    virtual ~IHttpClient() = default;
+    
+    virtual Result<String, HttpError> get(
+        const char* url,
+        int timeoutMs = 5000
+    ) = 0;
 
-    virtual bool get(const char* url, char* responseBuffer, size_t bufferSize) = 0;
 };
 
 
