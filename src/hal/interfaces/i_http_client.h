@@ -21,7 +21,6 @@ public:
         const char* url,
         int timeoutMs = 5000
     ) = 0;
-
 };
 
 

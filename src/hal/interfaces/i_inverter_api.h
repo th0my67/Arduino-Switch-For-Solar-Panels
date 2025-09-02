@@ -23,7 +23,7 @@ enum class InverterStatus {
 class IInverterAPI {
 public:
     virtual ~IInverterAPI() = default;
-    virtual Result<float, InverterError> getCurrentPower() = 0;
+    virtual Result<int, InverterError> getCurrentPower() = 0;
     virtual Result<InverterStatus, InverterError> getStatus() = 0;
     virtual const char* getBrandName() const = 0;
 };
