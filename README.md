@@ -1,28 +1,63 @@
 # Solar Panels / Inverter Arduino Switch
 
-The objective of this project is to activate a switch when the solar panel inverter produces power exceeding a certain threshold. Specifically, I aim to activate my boiler when the power output exceeds 5000W. This setup is tailored to function with an [Arduino MKR Zero board](https://docs.arduino.cc/hardware/mkr-zero/), the [MKR ETH Shield](https://docs.arduino.cc/hardware/mkr-eth-shield/), and a Fronius inverter compatible with solar_api v1. It emits a 3.3V signal from pin 6 when the inverter surpasses 5000W, which can be utilized to trigger a switch.
-Several Arduino libraries were utilized, primarily the [Ethernet](https://www.arduino.cc/reference/en/libraries/ethernet/) library. Additionally, the project relies on the [SPI](https://www.arduino.cc/reference/en/language/functions/communication/spi/) library, the [Arduino Low Power](https://www.arduino.cc/reference/en/libraries/arduino-low-power/) library and the Arduino.h file provided within the IDE.
+Activates a switch (e.g. a boiler contactor) when the solar inverter produces
+more power than a threshold — and, new in this rewrite, can also activate it at
+night when tomorrow's sunshine forecast is poor and the switch barely ran over
+the last two days (cheap night tariff fallback).
 
-## Customization
+The code is organised so that the **board** (MKR Zero + ETH Shield, MKR WiFi
+1010, …) and the **inverter vendor** (Fronius Solar API v1, SolarEdge
+monitoring API v2, …) are interchangeable adapters: the decision logic never
+touches hardware or vendor specifics, and runs as unit tests on your PC.
+See [ARCHITECTURE.md](ARCHITECTURE.md) (in French) for the full design.
 
-You have the flexibility to adjust all HTTP-related parameters used for the request. While the characters are modifiable, the buffer size is less flexible. It is initially set to 5 characters but can be adjusted to accommodate your specific needs. Additionally, the switch pin, power limit, delay between requests and sleep duration can be easily modified.
+## Features
 
-## Debugging LED
+- **Day mode** — polls the inverter every 90 s; switch ON above 5000 W,
+  OFF below 4500 W (hysteresis), fail-safe OFF when the inverter is unreachable.
+- **Evening decision (21:00)** — fetches tomorrow's sunshine hours from the
+  MeteoSwiss ICON-CH1 model (served as JSON by [Open-Meteo](https://open-meteo.com)).
+  If below 4 h **and** the switch ran less than 6 h over the last two days,
+  a night activation is scheduled.
+- **Night boost (02:00, 3 h)** — switch forced ON, then everything deep-sleeps
+  until 06:00. All thresholds and times are configurable in
+  `SolarSwitch/src/config/AppConfig.h`.
+- **Low power** — SAMD21 standby between polls and through the night; the
+  legacy debug LED blink patterns are preserved.
 
-For enhanced debugging convenience, the project includes blink patterns and commented serial prints. The following patterns are used:
+## Supported targets
 
-- ON 4s; OFF 0.5s; ON 1s; OFF 0.5s  : Ethernet Cable Error
-- ON 1s; OFF 0.5s; ON 1s; OFF 0.5s  : DHCP Error
-- ON 4s ; OFF 4s                    : No connection with the Host
-- ON 1s; OFF 4s                     : Waiting for the Next Request
-- ON 0.1s; OFF 0.1s                 : Waiting for the Response
+| | Fronius | SolarEdge |
+|---|---|---|
+| MKR Zero + MKR ETH Shield | `pio run -e mkrzero_eth` | (needs an NTP time source, see ARCHITECTURE.md) |
+| MKR WiFi 1010 | `pio run -e mkrwifi1010` | `pio run -e mkrwifi1010_solaredge` |
 
-At night, following the "TimeToSleep" period, the onboard LED will remain off until the Arduino wakes up.
+Arduino IDE users: open `SolarSwitch/SolarSwitch.ino` and pick the target in
+`src/config/PlatformSelect.h`.
 
-## Warning
+## Getting started
 
-**This project represents my initial venture into Arduino programming. As such, it may contain errors and should not be relied upon blindly.**
+1. Edit `SolarSwitch/src/config/AppConfig.h`: inverter IP (Fronius) or site id
+   (SolarEdge), your latitude/longitude for the forecast, thresholds and hours.
+2. WiFi or SolarEdge builds: copy `SolarSwitch/src/config/Secrets.example.h`
+   to `Secrets.h` and fill in your credentials (the file is gitignored).
+3. Build and upload with PlatformIO or the Arduino IDE.
+
+## Tests
+
+The whole decision logic (state machine, activation history, boost policy,
+JSON parsing, clock) is hardware-independent and covered by host-side tests:
+
+```bash
+pio test -e native
+```
+
+## Repository layout
+
+- `SolarSwitch/` — the application (see ARCHITECTURE.md for the layer map)
+- `test/test_core/` — host-side unit tests
+- `legacy/main.ino` — the original single-file sketch, kept for reference
 
 ## License
 
-This project is provided under the terms of the MIT License.
+MIT License.
