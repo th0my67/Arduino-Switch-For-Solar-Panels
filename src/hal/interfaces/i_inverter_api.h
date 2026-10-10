@@ -2,8 +2,7 @@
 #define I_INVERTER_API_H
 
 #include "utils/result.h"
-#include "hal/interfaces/i_network_interface.h"
-#include <memory>
+#include <Arduino.h>
 
 enum class InverterError {
     NetworkFailure,
@@ -27,4 +26,5 @@ public:
     virtual Result<InverterStatus, InverterError> getStatus() = 0;
     virtual const char* getBrandName() const = 0;
 };
+
 #endif

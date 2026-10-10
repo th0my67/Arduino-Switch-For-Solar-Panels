@@ -1,112 +1,102 @@
-#include "utils/result.h"
 #include "hal/implementations/arduino_http_client_adapter.h"
+#include "utils/url_parser.h"
 #include <ArduinoHttpClient.h>
 
-
-ArduinoHttpClientAdapter::ArduinoHttpClientAdapter(INetworkInterface* network) : network_(network) {}
-
-Result<String, HttpError> ArduinoHttpClientAdapter::get(const char* url, int timeoutMs) {
-    if (!network_->isConnected()) {
-        if (!network_->connect()) {
+namespace {
+// ArduinoHttpClient error codes (HTTP_SUCCESS == 0).
+HttpError mapRequestError(int err) {
+    switch (err) {
+        case HTTP_ERROR_TIMED_OUT:
+            return HttpError::Timeout;
+        case HTTP_ERROR_INVALID_RESPONSE:
+            return HttpError::InvalidResponse;
+        default: // HTTP_ERROR_CONNECTION_FAILED, HTTP_ERROR_API, unknown
             return HttpError::NetworkFailure;
-        }
     }
-    
-    auto parsedUrl = parseUrl(url);
-    if (!parsedUrl.isValid) {
-        return HttpError::InvalidResponse;
-    }
-    
-    auto client = network_->createClient();
-    if (!client) {
-        return HttpError::NetworkFailure;
-    }
-    
-    HttpClient httpClient(client, parsedUrl.host, parsedUrl.port);
-    httpClient.setTimeout(timeoutMs);
-    
-    int err = httpClient.get(parsedUrl.path);
-    if (err != 0) {
-        return mapArduinoError(err);
-    }
-    
-    int statusCode = httpClient.responseStatusCode();
-    if (statusCode >= 400 && statusCode < 500) {
-        return HttpError::NotFound;
-    } else if (statusCode >= 500) {
-        return HttpError::ServerError;
-    }
-    
-    String responseBody = httpClient.responseBody();
-    
-    return responseBody;
+}
+} // namespace
+
+ArduinoHttpClientAdapter::ArduinoHttpClientAdapter(INetworkInterface& network,
+                                                   size_t maxBodyBytes)
+    : network_(&network), maxBodyBytes_(maxBodyBytes) {}
+
+bool ArduinoHttpClientAdapter::isStatusSuccess(int statusCode) {
+    return statusCode >= 200 && statusCode < 400;
 }
 
+HttpError ArduinoHttpClientAdapter::classifyStatus(int statusCode) {
+    if (statusCode >= 500) return HttpError::ServerError;
+    if (statusCode == 404) return HttpError::NotFound;
+    return HttpError::ClientError; // other 4xx
+}
 
-ArduinoHttpClientAdapter::ParsedUrl ArduinoHttpClientAdapter::parseUrl(const char* url) {
-    ParsedUrl result;
-    result.isValid = false;
-    result.port = 80;  // Default port
-    result.path = "/"; // Default path
-   
-    // Input validation
-    if (!url || strlen(url) == 0) {
-        return result;
+Result<String, HttpError> ArduinoHttpClientAdapter::get(const char* url,
+                                                        unsigned long timeoutMs) {
+    const UrlComponents parsed = parseUrl(url);
+    if (!parsed.isValid) {
+        return Result<String, HttpError>::err(HttpError::InvalidResponse);
     }
-    
-    // Convert to String for easier manipulation
-    String workingUrl = String(url);
-    
-    // Basic URL parsing (http://<host>:<port>/<path>)
-    if (workingUrl.startsWith("http://")) {
-        workingUrl = workingUrl.substring(7);  // Remove "http://"
-    } else if (workingUrl.startsWith("https://")) {
-        // HTTPS not supported in this basic adapter
-        return result;
-    } else {
-        // No protocol specified - invalid
-        return result;
+
+    if (!network_->isConnected() && !network_->connect()) {
+        return Result<String, HttpError>::err(HttpError::NetworkFailure);
     }
-   
-    // Split into host:port and path parts
-    int pathIndex = workingUrl.indexOf('/');
-    String hostPort = (pathIndex == -1) ? workingUrl : workingUrl.substring(0, pathIndex);
-    result.path = (pathIndex == -1) ? "/" : workingUrl.substring(pathIndex);
-   
-    // Parse host and port
-    int portIndex = hostPort.indexOf(':');
-    String hostStr = (portIndex == -1) ? hostPort : hostPort.substring(0, portIndex);
-    String portStr = (portIndex == -1) ? "80" : hostPort.substring(portIndex + 1);
-    
-    // Parse port number with validation
-    if (portStr.length() > 0) {
-        long portLong = portStr.toInt();
-        if (portLong > 0 && portLong <= 65535) {
-            result.port = (int)portLong;
-        } else {
-            // Invalid port number
-            return result;
+
+    Client* rawClient = network_->createClient();
+    if (rawClient == nullptr) {
+        return Result<String, HttpError>::err(HttpError::NetworkFailure);
+    }
+
+    HttpClient http(*rawClient, parsed.host, (uint16_t)parsed.port);
+    http.setHttpResponseTimeout(timeoutMs);
+
+    // Guarantees the connection is closed on every exit path.
+    struct StopGuard {
+        HttpClient& h;
+        ~StopGuard() { h.stop(); }
+    } stopGuard{http};
+
+    const int requestError = http.get(parsed.path.c_str());
+    if (requestError != HTTP_SUCCESS) {
+        return Result<String, HttpError>::err(mapRequestError(requestError));
+    }
+
+    const int statusCode = http.responseStatusCode();
+    if (statusCode < 0) {
+        return Result<String, HttpError>::err(mapRequestError(statusCode));
+    }
+    if (!isStatusSuccess(statusCode)) {
+        return Result<String, HttpError>::err(classifyStatus(statusCode));
+    }
+
+    const int contentLength = http.contentLength(); // -1 when absent/chunked
+    if (contentLength > 0 && (size_t)contentLength > maxBodyBytes_) {
+        return Result<String, HttpError>::err(HttpError::InvalidResponse);
+    }
+
+    // Bounded body read. Without Content-Length the read stops when the
+    // server closes the connection or the overall deadline expires.
+    const unsigned long deadline = millis() + timeoutMs;
+    String body;
+    while (true) {
+        while (http.available() != 0) {
+            const int c = http.read();
+            if (c < 0) break;
+            body += (char)c;
+            if (body.length() >= maxBodyBytes_) {
+                return Result<String, HttpError>::err(HttpError::InvalidResponse);
+            }
         }
-    }
-    
-    // Parse IP address (most critical part)
-    if (hostStr.length() > 0) {
-        // Try to parse as IP address
-        if (!result.host.fromString(hostStr)) {
-            // Could not parse IP address
-            return result;
+        if (contentLength > 0 && (int)body.length() >= contentLength) break;
+        if (!http.connected()) break; // server closed the connection
+        if ((long)(deadline - millis()) <= 0) {
+            return Result<String, HttpError>::err(HttpError::Timeout);
         }
-    } else {
-        // Empty host
-        return result;
+        delay(1); // yield while waiting for data in flight
     }
-    
-    // Validate path
-    if (result.path.length() == 0) {
-        result.path = "/";
+
+    if (contentLength > 0 && (int)body.length() < contentLength) {
+        return Result<String, HttpError>::err(HttpError::InvalidResponse);
     }
-    
-    // All validations passed
-    result.isValid = true;
-    return result;
+
+    return Result<String, HttpError>::ok(body);
 }

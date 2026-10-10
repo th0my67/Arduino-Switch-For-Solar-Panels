@@ -1,35 +1,56 @@
 #ifndef RESULT_H
 #define RESULT_H
 
-#include <optional>
+#include <type_traits>
+#include <utility>
 
-template<typename T, typename E>
+// Rust-like Result<T, E>: holds either a value or an error, never both.
+// unwrap()/unwrapErr() must only be called after checking isOk()/isError().
+// For types T and E that are identical, use the ok()/err() factories: the
+// implicit single-argument constructors are then ambiguous (the value
+// constructor is disabled by SFINAE in that case).
+//
+// Kept C++11-compatible: the Arduino framework compiles with -std=gnu++11,
+// and std::optional is both C++17-only and heavier than this layout.
+template <typename T, typename E>
 class Result {
 public:
-    // Success constructor
-    Result(T value) : value_(value), error_(std::nullopt) {}
-    
-    // Error constructor  
-    Result(E error) : value_(std::nullopt), error_(error) {}
-    
-    // Check if operation succeeded
-    bool isOk() const { return value_.has_value(); }
-    bool isError() const { return error_.has_value(); }
-    
-    // Get value (only call if isOk() == true)
-    T unwrap() const { return value_.value(); }
-    
-    // Get error (only call if isError() == true)
-    E unwrapErr() const { return error_.value(); }
-    
-    // Safe value access with default
+    template <typename U,
+              typename = typename std::enable_if<!std::is_same<U, E>::value>::type>
+    Result(U value) : value_(std::move(value)), hasError_(false) {}
+
+    Result(E error) : error_(std::move(error)), hasError_(true) {}
+
+    static Result ok(T value) {
+        Result r;
+        r.value_ = std::move(value);
+        r.hasError_ = false;
+        return r;
+    }
+
+    static Result err(E error) {
+        Result r;
+        r.error_ = std::move(error);
+        r.hasError_ = true;
+        return r;
+    }
+
+    bool isOk() const { return !hasError_; }
+    bool isError() const { return hasError_; }
+
+    T unwrap() const { return value_; }
+    E unwrapErr() const { return error_; }
+
     T unwrapOr(const T& defaultValue) const {
-        return isOk() ? unwrap() : defaultValue;
+        return isOk() ? value_ : defaultValue;
     }
 
 private:
-    std::optional<T> value_;
-    std::optional<E> error_;
+    Result() : value_(), error_(), hasError_(false) {}
+
+    T value_;
+    E error_;
+    bool hasError_;
 };
 
 #endif
