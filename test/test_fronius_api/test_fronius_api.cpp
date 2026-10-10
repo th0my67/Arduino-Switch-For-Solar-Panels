@@ -145,6 +145,12 @@ void test_http_error_mapping(void) {
         (int)FroniusSolarApiV1::mapHttpError(HttpError::NotFound));
     TEST_ASSERT_EQUAL_INT((int)InverterError::InvalidResponse,
         (int)FroniusSolarApiV1::mapHttpError(HttpError::InvalidResponse));
+    TEST_ASSERT_EQUAL_INT((int)InverterError::AuthenticationFailure,
+        (int)FroniusSolarApiV1::mapHttpError(HttpError::AuthError));
+    TEST_ASSERT_EQUAL_INT((int)InverterError::RateLimited,
+        (int)FroniusSolarApiV1::mapHttpError(HttpError::RateLimited));
+    TEST_ASSERT_EQUAL_INT((int)InverterError::InvalidResponse,
+        (int)FroniusSolarApiV1::mapHttpError(HttpError::TlsUnsupported));
 }
 
 void test_network_failure_propagates(void) {

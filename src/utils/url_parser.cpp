@@ -40,10 +40,16 @@ UrlComponents parseUrl(const char* url) {
     if (len == 0 || len > kMaxUrlLength) return result;
 
     String working(url);
-    if (working.startsWith("http://")) {
+    if (working.startsWith("https://")) {
+        working = working.substring(8);
+        result.secure = true;
+        result.port = 443;
+    } else if (working.startsWith("http://")) {
         working = working.substring(7);
+        result.secure = false;
+        result.port = 80;
     } else {
-        // https:// and every other scheme (or scheme-less input) is invalid.
+        // Every other scheme (or scheme-less input) is invalid.
         return result;
     }
     if (working.isEmpty()) return result;

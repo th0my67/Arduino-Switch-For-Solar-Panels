@@ -50,6 +50,8 @@ private:
 class FakeNetwork : public INetworkInterface {
 public:
     FakeRawClient rawClient;
+    FakeRawClient secureClient; // serves https:// requests
+    bool hasSecureClient = true;
     bool networkConnected = true;
     bool connectResult = true;
     int connectCalls = 0;
@@ -62,6 +64,9 @@ public:
     bool isConnected() const override { return networkConnected; }
     void disconnect() override { networkConnected = false; }
     Client* createClient() override { return &rawClient; }
+    Client* createSecureClient() override {
+        return hasSecureClient ? &secureClient : nullptr;
+    }
     const char* getConnectionType() const override { return "Fake"; }
     int getSignalQuality() const override { return -1; }
 };
@@ -197,7 +202,33 @@ void test_status_classification(void) {
     TEST_ASSERT_FALSE(ArduinoHttpClientAdapter::isStatusSuccess(400));
     TEST_ASSERT_EQUAL_INT((int)HttpError::ServerError, (int)ArduinoHttpClientAdapter::classifyStatus(503));
     TEST_ASSERT_EQUAL_INT((int)HttpError::NotFound, (int)ArduinoHttpClientAdapter::classifyStatus(404));
-    TEST_ASSERT_EQUAL_INT((int)HttpError::ClientError, (int)ArduinoHttpClientAdapter::classifyStatus(401));
+    TEST_ASSERT_EQUAL_INT((int)HttpError::ClientError, (int)ArduinoHttpClientAdapter::classifyStatus(400));
+    TEST_ASSERT_EQUAL_INT((int)HttpError::AuthError, (int)ArduinoHttpClientAdapter::classifyStatus(401));
+    TEST_ASSERT_EQUAL_INT((int)HttpError::AuthError, (int)ArduinoHttpClientAdapter::classifyStatus(403));
+    TEST_ASSERT_EQUAL_INT((int)HttpError::RateLimited, (int)ArduinoHttpClientAdapter::classifyStatus(429));
+}
+
+void test_https_uses_secure_client(void) {
+    FakeNetwork net;
+    net.rawClient.setResponse("HTTP/1.1 200 OK\r\nContent-Length: 5\r\n\r\nWRONG");
+    net.secureClient.setResponse("HTTP/1.1 200 OK\r\nContent-Length: 4\r\n\r\nGOOD");
+    ArduinoHttpClientAdapter adapter(net, 4096);
+    auto r = adapter.get("https://monitoringapi.solaredge.com/v2/sites/1/power-flow", 1000);
+    TEST_ASSERT_TRUE(r.isOk());
+    TEST_ASSERT_EQUAL_STRING("GOOD", r.unwrap().c_str());
+    // The plain client must not have been touched.
+    TEST_ASSERT_EQUAL_INT(0, (int)net.rawClient.lastRequest.size());
+    TEST_ASSERT_NOT_NULL(strstr(net.secureClient.lastRequest.c_str(), "GET /v2/sites/1/power-flow"));
+    TEST_ASSERT_EQUAL_UINT16(443, net.secureClient.lastPort);
+}
+
+void test_https_without_tls_backend_is_reported(void) {
+    FakeNetwork net;
+    net.hasSecureClient = false; // e.g. plain Ethernet backend
+    ArduinoHttpClientAdapter adapter(net, 4096);
+    auto r = adapter.get("https://monitoringapi.solaredge.com/v2/sites/1/power-flow", 1000);
+    TEST_ASSERT_TRUE(r.isError());
+    TEST_ASSERT_EQUAL_INT((int)HttpError::TlsUnsupported, (int)r.unwrapErr());
 }
 
 int main() {
@@ -216,5 +247,7 @@ int main() {
     RUN_TEST(test_timeout_waiting_for_status);
     RUN_TEST(test_truncated_body_is_rejected);
     RUN_TEST(test_status_classification);
+    RUN_TEST(test_https_uses_secure_client);
+    RUN_TEST(test_https_without_tls_backend_is_reported);
     return UNITY_END();
 }

@@ -37,8 +37,28 @@ void test_max_port_value(void) {
     TEST_ASSERT_EQUAL_INT(65535, c.port);
 }
 
-void test_https_is_rejected(void) {
-    TEST_ASSERT_FALSE(parseUrl("https://192.168.1.161/api").isValid);
+void test_https_is_parsed(void) {
+    const UrlComponents c = parseUrl("https://monitoringapi.solaredge.com/v2/sites/123/power-flow");
+    TEST_ASSERT_TRUE(c.isValid);
+    TEST_ASSERT_TRUE(c.secure);
+    TEST_ASSERT_FALSE(c.isIp);
+    TEST_ASSERT_EQUAL_INT(443, c.port);
+    TEST_ASSERT_EQUAL_STRING("monitoringapi.solaredge.com", c.host.c_str());
+    TEST_ASSERT_EQUAL_STRING("/v2/sites/123/power-flow", c.path.c_str());
+}
+
+void test_https_with_explicit_port(void) {
+    const UrlComponents c = parseUrl("https://192.168.1.50:8443/api");
+    TEST_ASSERT_TRUE(c.isValid);
+    TEST_ASSERT_TRUE(c.secure);
+    TEST_ASSERT_EQUAL_INT(8443, c.port);
+    TEST_ASSERT_EQUAL_STRING("192.168.1.50", c.host.c_str());
+}
+
+void test_unsupported_schemes_are_rejected(void) {
+    TEST_ASSERT_FALSE(parseUrl("ftp://192.168.1.161/api").isValid);
+    TEST_ASSERT_FALSE(parseUrl("ws://192.168.1.161/api").isValid);
+    TEST_ASSERT_FALSE(parseUrl("//192.168.1.161/api").isValid);
 }
 
 void test_null_and_empty_are_rejected(void) {
@@ -112,7 +132,9 @@ int main() {
     RUN_TEST(test_ip_default_port_and_default_path);
     RUN_TEST(test_hostname_is_accepted);
     RUN_TEST(test_max_port_value);
-    RUN_TEST(test_https_is_rejected);
+    RUN_TEST(test_https_is_parsed);
+    RUN_TEST(test_https_with_explicit_port);
+    RUN_TEST(test_unsupported_schemes_are_rejected);
     RUN_TEST(test_null_and_empty_are_rejected);
     RUN_TEST(test_scheme_only_is_rejected);
     RUN_TEST(test_no_scheme_is_rejected);

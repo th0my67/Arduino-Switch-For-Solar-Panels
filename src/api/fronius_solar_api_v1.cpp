@@ -44,9 +44,14 @@ InverterError FroniusSolarApiV1::mapHttpError(HttpError error) {
             return InverterError::NetworkFailure;
         case HttpError::ServerError:
             return InverterError::ServiceUnavailable;
+        case HttpError::AuthError:
+            return InverterError::AuthenticationFailure;
+        case HttpError::RateLimited:
+            return InverterError::RateLimited;
         case HttpError::NotFound:
         case HttpError::ClientError:
         case HttpError::InvalidResponse:
+        case HttpError::TlsUnsupported:
         default:
             return InverterError::InvalidResponse;
     }

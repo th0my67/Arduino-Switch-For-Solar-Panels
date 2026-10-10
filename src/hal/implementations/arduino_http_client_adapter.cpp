@@ -27,6 +27,8 @@ bool ArduinoHttpClientAdapter::isStatusSuccess(int statusCode) {
 HttpError ArduinoHttpClientAdapter::classifyStatus(int statusCode) {
     if (statusCode >= 500) return HttpError::ServerError;
     if (statusCode == 404) return HttpError::NotFound;
+    if (statusCode == 401 || statusCode == 403) return HttpError::AuthError;
+    if (statusCode == 429) return HttpError::RateLimited;
     return HttpError::ClientError; // other 4xx
 }
 
@@ -41,9 +43,11 @@ Result<String, HttpError> ArduinoHttpClientAdapter::get(const char* url,
         return Result<String, HttpError>::err(HttpError::NetworkFailure);
     }
 
-    Client* rawClient = network_->createClient();
+    Client* rawClient = parsed.secure ? network_->createSecureClient()
+                                     : network_->createClient();
     if (rawClient == nullptr) {
-        return Result<String, HttpError>::err(HttpError::NetworkFailure);
+        // https:// requested, but this backend has no TLS client.
+        return Result<String, HttpError>::err(HttpError::TlsUnsupported);
     }
 
     HttpClient http(*rawClient, parsed.host, (uint16_t)parsed.port);

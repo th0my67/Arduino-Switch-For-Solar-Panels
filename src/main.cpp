@@ -5,7 +5,11 @@
 #include "config.h"
 #include "hal/implementations/wifi_network.h"
 #include "hal/implementations/arduino_http_client_adapter.h"
+#if INVERTER_BRAND == INVERTER_BRAND_SOLAREDGE
+#include "api/solaredge_api_v2.h"
+#else
 #include "api/fronius_solar_api_v1.h"
+#endif
 #include "services/power_monitor.h"
 #include "switch_controller.h"
 #include "time_manager.h"
@@ -58,10 +62,17 @@ private:
 WiFiNetwork wifiNetwork(config::WIFI_SSID, config::WIFI_PASS,
                         config::WIFI_CONNECT_TIMEOUT_MS);
 ArduinoHttpClientAdapter httpClient(wifiNetwork, config::HTTP_MAX_BODY_BYTES);
+
+#if INVERTER_BRAND == INVERTER_BRAND_SOLAREDGE
+PowerMonitor powerMonitor(std::unique_ptr<IInverterAPI>(new SolarEdgeApiV2(
+    config::SOLAREDGE_SITE_ID, config::SOLAREDGE_API_KEY, httpClient,
+    config::SOLAREDGE_HOST)));
+#else
 PowerMonitor powerMonitor(std::unique_ptr<IInverterAPI>(new FroniusSolarApiV1(
     IPAddress(config::INVERTER_IP[0], config::INVERTER_IP[1],
               config::INVERTER_IP[2], config::INVERTER_IP[3]),
     httpClient)));
+#endif
 SwitchController switchController(config::SWITCH_PIN,
                                     config::POWER_ON_THRESHOLD_W,
                                     config::POWER_OFF_THRESHOLD_W,

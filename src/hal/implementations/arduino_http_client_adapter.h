@@ -15,7 +15,6 @@ public:
     // Maps an HTTP status code to the error domain. 2xx/3xx are success.
     static bool isStatusSuccess(int statusCode);
     static HttpError classifyStatus(int statusCode);
-
 private:
     INetworkInterface* network_;
     size_t maxBodyBytes_;

@@ -5,6 +5,7 @@ cd "$(dirname "$0")/.."
 
 pio test -e native_test
 pio run -e mkr1010_release
+pio run -e mkr1010_solaredge
 pio run -e mkr1010_debug
 pio run -e mkr1010_ethernet
 pio run -e mkr1010_ota

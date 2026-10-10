@@ -16,6 +16,7 @@ public:
     bool isConnected() const override;
     void disconnect() override;   // disconnect + end(): module powered down
     Client* createClient() override { return &client_; }
+    Client* createSecureClient() override { return &sslClient_; }
     const char* getConnectionType() const override { return "WiFi"; }
     int getSignalQuality() const override;
 
@@ -27,6 +28,7 @@ private:
     const char* password_;
     uint32_t connectTimeoutMs_;
     WiFiClient client_;
+    WiFiSSLClient sslClient_; // TLS client for https:// (cloud APIs)
 };
 
 #endif

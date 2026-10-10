@@ -26,6 +26,9 @@ public:
     virtual bool isConnected() const = 0;
     virtual void disconnect() = 0;
     virtual Client* createClient() = 0;
+    // TLS-capable client for https:// URLs. Returns nullptr when the
+    // backend has no TLS support (e.g. plain Ethernet).
+    virtual Client* createSecureClient() { return nullptr; }
 
     // Diagnostics
     virtual const char* getConnectionType() const = 0; // "WiFi", "Ethernet"

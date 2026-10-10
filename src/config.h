@@ -17,11 +17,32 @@ namespace config {
 constexpr const char* WIFI_SSID = SECRET_SSID;
 constexpr const char* WIFI_PASS = SECRET_PASS;
 
-// Inverter (Fronius Solar API v1, plain HTTP, no authentication)
+// --- Inverter brand selection -------------------------------------------
+// FRONIUS:    local Solar API v1 over HTTP (needs INVERTER_IP)
+// SOLAREDGE:  cloud Monitoring API v2 over HTTPS (needs site id + API key,
+//             the API key comes from arduino_secrets.h)
+#define INVERTER_BRAND_FRONIUS 1
+#define INVERTER_BRAND_SOLAREDGE 2
+#ifndef INVERTER_BRAND
+#define INVERTER_BRAND INVERTER_BRAND_FRONIUS
+#endif
+
+// Fronius (local network, plain HTTP, no authentication)
 constexpr uint8_t INVERTER_IP[4] = {192, 168, 1, 161};
 constexpr uint16_t HTTP_TIMEOUT_MS = 5000;
 constexpr size_t HTTP_MAX_BODY_BYTES = 4096; // bounded: SAMD21 has 32 KB RAM
 constexpr uint32_t WIFI_CONNECT_TIMEOUT_MS = 20000;
+
+// SolarEdge (cloud Monitoring API v2)
+#ifndef SECRET_SOLAREDGE_SITE_ID
+#define SECRET_SOLAREDGE_SITE_ID "1234567"
+#endif
+#ifndef SECRET_SOLAREDGE_API_KEY
+#define SECRET_SOLAREDGE_API_KEY "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+#endif
+constexpr const char* SOLAREDGE_SITE_ID = SECRET_SOLAREDGE_SITE_ID;
+constexpr const char* SOLAREDGE_API_KEY = SECRET_SOLAREDGE_API_KEY;
+constexpr const char* SOLAREDGE_HOST = "monitoringapi.solaredge.com";
 
 // Switch / boiler
 constexpr uint8_t SWITCH_PIN = 6;             // 3.3 V signal pin (see README)
