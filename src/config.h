@@ -2,6 +2,7 @@
 #define CONFIG_H
 
 #include <Arduino.h>
+#include "services/activation_tracker.h"
 
 #if __has_include("arduino_secrets.h")
 #include "arduino_secrets.h"
@@ -91,6 +92,30 @@ constexpr const char* WEATHER_TIMEZONE = "Europe/Zurich";
 // Fail-safe when the network cannot be (re)joined: low-power wait before
 // retrying, so a dead AP does not drain the board with busy retries.
 constexpr uint32_t NETWORK_FAILURE_RETRY_MS = 600000; // 10 min
+
+// --- Compile-time invariants ---------------------------------------------
+// A time-related misconfiguration must fail the build, not silently
+// misbehave at runtime. Evaluated wherever config.h is included: the
+// firmware build (via main.cpp) and the native test build (via
+// test_config).
+static_assert(SLEEP_START_HOUR >= 1 && SLEEP_START_HOUR <= 23,
+    "SLEEP_START_HOUR must be in [1..23]: 0 would sleep forever, >= 24 never matches");
+static_assert(BACKUP_START_HOUR <= 23,
+    "BACKUP_START_HOUR must be in [0..23]");
+static_assert(BACKUP_CHARGE_DURATION_H >= 1,
+    "BACKUP_CHARGE_DURATION_H must be at least 1 h");
+static_assert(WEATHER_FETCH_HOUR <= 23,
+    "WEATHER_FETCH_HOUR must be in [0..23]");
+static_assert((long)BACKUP_START_HOUR + (long)BACKUP_CHARGE_DURATION_H <= (long)SLEEP_START_HOUR,
+    "the backup charge must end before the night sleep starts: "
+    "BACKUP_START_HOUR + BACKUP_CHARGE_DURATION_H <= SLEEP_START_HOUR");
+static_assert(WEATHER_FETCH_HOUR < SLEEP_START_HOUR,
+    "the daily weather evaluation must run while the board is awake: "
+    "WEATHER_FETCH_HOUR < SLEEP_START_HOUR");
+static_assert(POWER_OFF_THRESHOLD_W < POWER_ON_THRESHOLD_W,
+    "hysteresis requires POWER_OFF_THRESHOLD_W < POWER_ON_THRESHOLD_W");
+static_assert(BACKUP_HISTORY_DAYS >= 1 && BACKUP_HISTORY_DAYS <= ActivationTracker::kMaxDays,
+    "BACKUP_HISTORY_DAYS must be in [1..8] (ActivationTracker::kMaxDays)");
 
 } // namespace config
 

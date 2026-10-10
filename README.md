@@ -184,6 +184,11 @@ by the radio; micro-amps range for the CPU during standby sleep.
 
 Behavior notes:
 
+- these time-related parameters are checked at **compile time**
+  (`static_assert` in `config.h`): a backup window that would overlap the
+  night sleep, an out-of-range hour, an inverted hysteresis pair or a
+  history window beyond the tracker capacity all fail the build instead
+  of misbehaving at runtime;
 - the ON-hours history lives in RAM: a power cycle forgets it, which can
   cause one extra grid charge while the history rebuilds (fail direction
   chosen deliberately: comfort over strict grid frugality);
@@ -213,7 +218,7 @@ Requirements: [PlatformIO](https://platformio.org/).
 
 ```bash
 tools/build.sh            # unit tests + all firmware builds
-pio test -e native_test   # 153 host unit tests
+pio test -e native_test   # 158 host unit tests
 tools/upload.sh                          # upload Fronius release firmware
 tools/upload.sh mkr1010_solaredge       # upload SolarEdge firmware
 pio device monitor                      # serial console (debug env)
