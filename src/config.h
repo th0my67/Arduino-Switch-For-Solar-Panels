@@ -68,6 +68,26 @@ constexpr uint32_t NTP_SYNC_INTERVAL_S = 86400;      // daily, RTC-based
 constexpr uint32_t NTP_RETRY_INTERVAL_MS = 1800000;  // 30 min while unsynced
 constexpr uint32_t NTP_TIMEOUT_MS = 5000;
 
+// --- Backup grid charge (anti-cold-water) --------------------------------
+// If the switch has been ON less than BACKUP_MIN_ACTIVATION_H during the
+// last BACKUP_HISTORY_DAYS days AND tomorrow's sunshine forecast is below
+// BACKUP_SUNSHINE_THRESHOLD_H, the boiler is charged from the grid the
+// next day, from BACKUP_START_HOUR for BACKUP_CHARGE_DURATION_H.
+// The decision is evaluated daily at WEATHER_FETCH_HOUR (local).
+constexpr bool BACKUP_ENABLED = true;
+constexpr float BACKUP_MIN_ACTIVATION_H = 2.0;
+constexpr uint8_t BACKUP_HISTORY_DAYS = 2;
+constexpr float BACKUP_SUNSHINE_THRESHOLD_H = 4.0;
+constexpr uint8_t BACKUP_START_HOUR = 13;
+constexpr uint8_t BACKUP_CHARGE_DURATION_H = 3;
+constexpr uint8_t WEATHER_FETCH_HOUR = 18; // after solar peak, before night
+
+// Sunshine forecast (Open-Meteo; MeteoSwiss publishes its sunshine
+// forecast only as multi-MB all-locations files, unusable on this board).
+constexpr double WEATHER_LATITUDE = 46.5;  // your location
+constexpr double WEATHER_LONGITUDE = 6.6;
+constexpr const char* WEATHER_TIMEZONE = "Europe/Zurich";
+
 // Fail-safe when the network cannot be (re)joined: low-power wait before
 // retrying, so a dead AP does not drain the board with busy retries.
 constexpr uint32_t NETWORK_FAILURE_RETRY_MS = 600000; // 10 min

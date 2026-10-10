@@ -175,6 +175,31 @@ void test_time_in_current_state(void) {
     TEST_ASSERT_EQUAL_UINT32(9000, c.timeInCurrentStateMs(10000));
 }
 
+void test_force_on(void) {
+    auto c = makeController();
+    c.begin(millis());
+    // Well below the ON threshold: forceOn still closes the switch.
+    applyPower(c, 100);
+    c.forceOn(millis());
+    TEST_ASSERT_TRUE(c.isOn());
+    TEST_ASSERT_EQUAL_INT(HIGH, stubs::pinState(kPin));
+    // Idempotent: timestamp untouched.
+    const uint32_t before = c.timeInCurrentStateMs(millis());
+    stubs::advanceMillis(50);
+    c.forceOn(millis());
+    TEST_ASSERT_TRUE(c.timeInCurrentStateMs(millis()) >= before);
+}
+
+void test_force_on_then_force_off(void) {
+    auto c = makeController();
+    c.begin(millis());
+    c.forceOn(millis());
+    TEST_ASSERT_TRUE(c.isOn());
+    c.forceOff(millis());
+    TEST_ASSERT_FALSE(c.isOn());
+    TEST_ASSERT_EQUAL_INT(LOW, stubs::pinState(kPin));
+}
+
 int main() {
     UNITY_BEGIN();
     RUN_TEST(test_begin_sets_pin_off);
@@ -185,6 +210,8 @@ int main() {
     RUN_TEST(test_single_error_holds_state);
     RUN_TEST(test_consecutive_failures_force_off);
     RUN_TEST(test_force_off);
+    RUN_TEST(test_force_on);
+    RUN_TEST(test_force_on_then_force_off);
     RUN_TEST(test_time_rollover_is_safe);
     RUN_TEST(test_inverted_thresholds_are_normalized);
     RUN_TEST(test_time_in_current_state);

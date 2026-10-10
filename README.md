@@ -21,6 +21,25 @@ water boiler:
 - at night (from 21:00 by default) the switch is cut, the WiFi module is
   powered down and the board deep-sleeps until morning.
 
+### Backup grid charge (anti-cold-water)
+
+Solar production is not guaranteed: after a few very cloudy days the
+boiler may end up lukewarm. Once per day (at 18:00 by default) the board
+evaluates both of these conditions:
+
+1. the switch has been **ON less than 2 hours** over the last
+   **2 days** (the sun did not heat the boiler enough), AND
+2. tomorrow's forecast promises **less than 4 hours of sunshine**
+   (tomorrow will not fix it either).
+
+When both hold, the boiler is charged **from the grid** the next day:
+the switch is forced ON at **13:00** for **3 hours**, regardless of
+production. Without a valid clock or a usable forecast nothing is ever
+forced ON from the grid. All thresholds are configurable (see below).
+
+The sunshine forecast comes from the Open-Meteo daily API — see
+[Sunshine forecast](#sunshine-forecast) for why not MeteoSwiss.
+
 ### Supported inverters
 
 Two inverter backends are compiled in, selected by a single constant in
@@ -50,12 +69,17 @@ src/
 ├── config.h                     # all tunables in one place
 ├── api/
 │   ├── fronius_solar_api_v1.*   # Fronius local Solar API v1 client
-│   └── solaredge_api_v2.*       # SolarEdge cloud Monitoring API v2 client
-├── services/power_monitor.*     # bounded retries, error mapping, caching
+│   ├── solaredge_api_v2.*       # SolarEdge cloud Monitoring API v2 client
+│   └── open_meteo_forecast.*    # Open-Meteo sunshine forecast client
+├── services/
+│   ├── power_monitor.*          # bounded retries, error mapping, caching
+│   ├── activation_tracker.*     # ON hours per day over the last days
+│   └── backup_charge.*          # backup grid-charge decision + scheduling
 ├── switch_controller.*          # hysteresis, min durations, fail-safe OFF
 ├── time_manager.*               # SNTP client + night detection (RTC-backed)
 ├── hal/
-│   ├── interfaces/              # IInverterAPI, IHttpClient, INetworkInterface
+│   ├── interfaces/              # IInverterAPI, IHttpClient, INetworkInterface,
+│   │                            # IForecastProvider
 │   └── implementations/         # WiFiNINA / HTTP adapter (+ Ethernet build)
 └── utils/                       # Result<T,E>, URL parser, logging
 ```
@@ -144,13 +168,52 @@ by the radio; micro-amps range for the CPU during standby sleep.
 | `HTTP_TIMEOUT_MS` | `5000` | Per-request timeout (connection, response, body). |
 | `HTTP_MAX_BODY_BYTES` | `4096` | Response size cap — protects the 32 KB RAM of the SAMD21. |
 
+### Backup grid charge and sunshine forecast
+
+| Parameter | Default | Description |
+|---|---|---|
+| `BACKUP_ENABLED` | `true` | Master switch of the feature. |
+| `BACKUP_MIN_ACTIVATION_H` | `2.0` | The boiler is considered "not heated enough" if the switch was ON less than this many hours over the history window. |
+| `BACKUP_HISTORY_DAYS` | `2` | Look-back window (days, including today) for the ON-hours check. |
+| `BACKUP_SUNSHINE_THRESHOLD_H` | `4.0` | Below this many forecast sunshine hours tomorrow counts as a "poor solar day". |
+| `BACKUP_START_HOUR` | `13` | Local hour at which the forced grid charge starts the next day. Keep it before `SLEEP_START_HOUR`. |
+| `BACKUP_CHARGE_DURATION_H` | `3` | Forced charge duration (hours). |
+| `WEATHER_FETCH_HOUR` | `18` | Local hour at which the daily evaluation runs (after the solar peak, before night sleep). |
+| `WEATHER_LATITUDE` / `WEATHER_LONGITUDE` | `46.5` / `6.6` | Forecast location. |
+| `WEATHER_TIMEZONE` | `Europe/Zurich` | Timezone sent to Open-Meteo so that forecast days match local days. |
+
+Behavior notes:
+
+- the ON-hours history lives in RAM: a power cycle forgets it, which can
+  cause one extra grid charge while the history rebuilds (fail direction
+  chosen deliberately: comfort over strict grid frugality);
+- a failed forecast fetch is retried every 15 minutes inside the fetch
+  hour; if it never succeeds, no charge is forced that day (no forced
+  grid heating on missing data).
+
+#### Sunshine forecast
+
+The forecast provider is pluggable (`IForecastProvider`). The shipped
+implementation is **Open-Meteo** (HTTPS, free, no API key, ~250-byte
+response, official `sunshine_hours` daily variable). MeteoSwiss was
+evaluated first but is not usable from this board:
+
+- its open data publishes the sunshine forecast (`sre000h0`) only as
+  files containing **all ~6'000 forecast points at once** — several
+  megabytes, impossible to download or parse with 32 KB of RAM;
+- the JSON API used by the official app has no sunshine field at all
+  (only temperature, precipitation, wind and weather icons).
+
+If MeteoSwiss ever publishes a compact per-location forecast API, a
+`MeteoSwissForecast` class can be dropped in behind the same interface.
+
 ## Build and test
 
 Requirements: [PlatformIO](https://platformio.org/).
 
 ```bash
 tools/build.sh            # unit tests + all firmware builds
-pio test -e native_test   # 117 host unit tests
+pio test -e native_test   # 153 host unit tests
 tools/upload.sh                          # upload Fronius release firmware
 tools/upload.sh mkr1010_solaredge       # upload SolarEdge firmware
 pio device monitor                      # serial console (debug env)
@@ -161,7 +224,9 @@ with the real ArduinoJson and ArduinoHttpClient libraries: parsing (all
 malformed/absent-field variants), both unit conversions (kW/W/MW), URL
 validation, HTTP classification (401/403/404/429/5xx, TLS, truncated or
 oversized bodies), retry bounds, hysteresis, rollover, NTP packet
-validation and night detection.
+validation, night detection, sunshine forecast extraction (date parsing,
+null values, day matching), ON-hours tracking (day boundaries, capped
+gaps, history windows) and the full backup-charge decision matrix.
 
 ### Build environments (platformio.ini)
 

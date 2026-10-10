@@ -10,9 +10,13 @@ void TimeManager::onNtpSync(unsigned long epochSeconds) {
 
 int TimeManager::currentHour() const {
     if (!synced_) return -1;
-    const unsigned long localSeconds =
-        clock_.epoch() + (unsigned long)utcOffsetSeconds_;
+    const unsigned long localSeconds = localEpoch();
     return (int)((localSeconds / 3600UL) % 24UL);
+}
+
+unsigned long TimeManager::localEpoch() const {
+    if (!synced_) return 0;
+    return clock_.epoch() + (unsigned long)utcOffsetSeconds_;
 }
 
 bool TimeManager::isNight(int sleepStartHour) const {

@@ -30,6 +30,10 @@ public:
 
     bool isSynced() const { return synced_; }
     int currentHour() const;               // 0..23 local, -1 when unsynced
+    // Local time as Unix epoch seconds (already shifted by the UTC
+    // offset); 0 when unsynchronized. The domain used by the backup
+    // charge feature, robust across deep sleeps.
+    unsigned long localEpoch() const;
     bool isNight(int sleepStartHour) const; // true from sleepStartHour to midnight
 
     // Rate-limits NTP attempts. Once synced: epoch-based (wall time,

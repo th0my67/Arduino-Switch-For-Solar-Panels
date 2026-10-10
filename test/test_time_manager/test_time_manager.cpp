@@ -266,6 +266,25 @@ void test_resync_rate_limits_when_unsynced(void) {
     TEST_ASSERT_TRUE(tm.shouldAttemptSync(86400, 1800000));
 }
 
+void test_local_epoch_applies_offset(void) {
+    FakeEpochClock clock;
+    TimeManager tm(clock, 3600); // UTC+1
+    tm.onNtpSync(1000000UL);
+    TEST_ASSERT_EQUAL_UINT32(1003600UL, tm.localEpoch());
+
+    // Unsynced: zero, never a plausible date.
+    FakeEpochClock clock2;
+    TimeManager tm2(clock2, 3600);
+    TEST_ASSERT_EQUAL_UINT32(0, tm2.localEpoch());
+}
+
+void test_local_epoch_drives_hour(void) {
+    FakeEpochClock clock;
+    TimeManager tm(clock, 0);
+    tm.onNtpSync(22UL * 3600UL);
+    TEST_ASSERT_EQUAL_INT(22, (int)((tm.localEpoch() / 3600UL) % 24UL));
+}
+
 int main() {
     UNITY_BEGIN();
     RUN_TEST(test_valid_server_response);
@@ -286,5 +305,7 @@ int main() {
     RUN_TEST(test_rtc_epoch_updated_on_sync);
     RUN_TEST(test_resync_rate_limits_when_synced);
     RUN_TEST(test_resync_rate_limits_when_unsynced);
+    RUN_TEST(test_local_epoch_applies_offset);
+    RUN_TEST(test_local_epoch_drives_hour);
     return UNITY_END();
 }

@@ -28,6 +28,8 @@ public:
     void begin(uint32_t nowMs); // configure pin as output, switch OFF
     void applyReading(const Result<int, PowerError>& reading, uint32_t nowMs);
     void forceOff(uint32_t nowMs);
+    // Forces the switch ON regardless of readings (backup grid charge).
+    void forceOn(uint32_t nowMs);
 
     bool isOn() const { return on_; }
     uint32_t timeInCurrentStateMs(uint32_t nowMs) const;

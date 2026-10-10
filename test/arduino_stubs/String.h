@@ -6,6 +6,7 @@
 #include <cstring>
 #include <cstdlib>
 #include <cctype>
+#include <cstdio>
 
 class String {
 public:
@@ -14,6 +15,11 @@ public:
     String(const String&) = default;
     String(String&&) = default;
     String(const std::string& s) : s_(s) {}
+    String(double v, int decimals = 2) {
+        char buf[48];
+        snprintf(buf, sizeof(buf), "%.*f", decimals, v);
+        s_ = buf;
+    }
 
     String& operator=(const String&) = default;
     String& operator=(const char* s) { s_ = (s ? s : ""); return *this; }

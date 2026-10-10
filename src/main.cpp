@@ -11,6 +11,9 @@
 #include "api/fronius_solar_api_v1.h"
 #endif
 #include "services/power_monitor.h"
+#include "services/activation_tracker.h"
+#include "services/backup_charge.h"
+#include "api/open_meteo_forecast.h"
 #include "switch_controller.h"
 #include "time_manager.h"
 #include "utils/logging.h"
@@ -81,6 +84,23 @@ SwitchController switchController(config::SWITCH_PIN,
                                     config::FAILURES_BEFORE_FORCED_OFF);
 RtcEpochSource rtcEpochSource;
 TimeManager timeManager(rtcEpochSource, config::UTC_OFFSET_SECONDS);
+
+#if BACKUP_ENABLED
+OpenMeteoForecast sunshineForecast(config::WEATHER_LATITUDE,
+                                    config::WEATHER_LONGITUDE,
+                                    config::WEATHER_TIMEZONE, httpClient);
+ActivationTracker activationTracker;
+BackupChargeConfig backupConfig = {
+    config::BACKUP_MIN_ACTIVATION_H,
+    config::BACKUP_HISTORY_DAYS,
+    config::BACKUP_SUNSHINE_THRESHOLD_H,
+    config::BACKUP_START_HOUR,
+    config::BACKUP_CHARGE_DURATION_H,
+    config::WEATHER_FETCH_HOUR,
+};
+BackupChargeController backupCharge(sunshineForecast, backupConfig);
+bool backupWindowWasActive = false;
+#endif
 
 // Wall-clock milliseconds for SwitchController timing.
 // RTC-based once synchronized (deep-sleep-proof); millis() before that.
@@ -153,8 +173,29 @@ void loop() {
     }
 
     // 2. Drive the switch (hysteresis, min durations, fail-safe).
+    //    A scheduled backup charge overrides the production logic:
+    //    the boiler then heats from the grid, deliberately.
     const uint32_t nowMs = wallClockMs();
+#if BACKUP_ENABLED
+    const unsigned long localEpoch = timeManager.localEpoch();
+    backupCharge.tick(localEpoch, activationTracker);
+    if (backupCharge.shouldForceOn(localEpoch)) {
+        switchController.forceOn(nowMs);
+        backupWindowWasActive = true;
+        LOG_INFO("BACKUP", "forced grid charge");
+    } else {
+        if (backupWindowWasActive) {
+            switchController.forceOff(nowMs); // window just ended
+            backupWindowWasActive = false;
+        }
+        switchController.applyReading(reading, nowMs);
+    }
+    if (localEpoch != 0) {
+        activationTracker.record(localEpoch, switchController.isOn());
+    }
+#else
     switchController.applyReading(reading, nowMs);
+#endif
 
     // 3. Keep time synchronized at a low rate (RTC-based, once synced).
     if (timeManager.shouldAttemptSync(config::NTP_SYNC_INTERVAL_S,

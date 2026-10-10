@@ -43,6 +43,12 @@ void SwitchController::forceOff(uint32_t nowMs) {
     }
 }
 
+void SwitchController::forceOn(uint32_t nowMs) {
+    if (!on_) {
+        setOutput(true, nowMs);
+    }
+}
+
 void SwitchController::applyReading(const Result<int, PowerError>& reading,
                                     uint32_t nowMs) {
     if (reading.isError()) {
